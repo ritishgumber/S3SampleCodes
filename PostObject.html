@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Amazon S3 Post Object</title>
+    <meta name=viewport content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex">
+    <script src="https://sdk.amazonaws.com/js/aws-sdk-2.407.0.min.js"></script>
+
+    <style>
+        body,
+        input[type=submit] {
+            font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+            font-size: x-large;
+        }
+
+        .inputs {
+            display: flex;
+            flex-direction: column;
+            align-items: left;
+            justify-content: left;
+        }
+
+        label {
+            padding: 1em;
+            margin: 0.3em;
+            border: thick solid #0099CC;
+        }
+    </style>
+    <script>
+        function fileSelected() {
+            var config = {
+                bucket: document.getElementById('bucketname').value
+            }
+            AWS.config.region = 'us-east-1'
+            
+            if(document.getElementById('sessionToken').value.length){
+                 AWS.config.credentials = new AWS.Credentials({
+                    accessKeyId: document.getElementById('accessKey').value,
+                    secretAccessKey: document.getElementById('secretKey').value,
+                    sessionToken: document.getElementById('sessionToken').value
+                });
+            }
+    else{
+     AWS.config.credentials = new AWS.Credentials({
+                    accessKeyId: document.getElementById('accessKey').value,
+                    secretAccessKey: document.getElementById('secretKey').value 
+                              });
+    }
+          
+
+
+                var S3 = new AWS.S3()
+                var params = {
+                Bucket: config.bucket,
+                Fields: {
+                    key: document.getElementById('filename').value,
+                    'Content-Type': 'text/plain'
+                    // tagging:'<Tagging><TagSet><Tag><Key>Tag Name</Key><Value>Tag Value</Value></Tag></TagSet></Tagging>'
+                },
+                Conditions: [
+                    ["content-length-range", 0, 2097152]
+                ]
+            };
+
+            // https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/S3.html#createPresignedPost-property
+            const presigned = S3.createPresignedPost(params)
+            console.log(presigned)
+
+            f = document.getElementById("file");
+            var file = f.files[0];
+            var ymd = new Date().toISOString().slice(0, 10);
+          
+            var fd = new FormData();
+            fd.append('key', document.getElementById('filename').value);
+            fd.append('Content-Type', 'text/plain');
+            // https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-post-example.html
+            fd.append('policy', `${presigned.fields.Policy}`);
+            // fd.append('tagging', '<Tagging><TagSet><Tag><Key>Tag Name</Key><Value>Tag Value</Value></Tag></TagSet></Tagging>');
+            fd.append('X-Amz-Signature', `${presigned.fields['X-Amz-Signature']}`);
+            fd.append('X-Amz-Credential', `${presigned.fields['X-Amz-Credential']}`);
+            fd.append('X-Amz-Algorithm', `${presigned.fields['X-Amz-Algorithm']}`);
+            if(presigned.fields['X-Amz-Security-Token'])
+            fd.append('X-Amz-Security-Token', `${presigned.fields['X-Amz-Security-Token']}`);
+            fd.append('X-Amz-Date', `${presigned.fields['X-Amz-Date']}`);
+            fd.append("file", f.files[0]);
+            fetch(`https://${config.bucket}.s3.amazonaws.com`, { method: "POST", body: fd }).then(function (res) {
+                if (res.ok) {
+                    console.log("Successfully uploaded")
+                } else {
+                    console.error("Fail", res)
+                }
+            }).catch(error => console.log(error));
+            return false;
+        }
+    </script>
+</head>
+
+<body>
+    <div id="fileName"></div>
+    <div id="fileSize"></div>
+    <div id="fileType"></div>
+    <form class=inputs onsubmit="return fileSelected(this);">
+        <label>Upload file name
+            <input type=text id=filename autocomplete="on" autocorrect="off" autocapitalize="off" spellcheck="false"></label>
+        <label>Upload file <input type=file required id=file></label>
+        <label> Access Key
+            <input type=text id=accessKey autocomplete="on" autocorrect="off" autocapitalize="off" spellcheck="false">
+        </label>
+
+        <label> Secret Key
+            <input type=text id=secretKey autocomplete="on" autocorrect="off" autocapitalize="off" spellcheck="false">
+        </label>
+
+        <label> Session Token (optional)
+            <input type=text id=sessionToken autocomplete="on" autocorrect="off" autocapitalize="off" spellcheck="false">
+        </label>
+        <label> Bucket
+            <input type=text id=bucketname autocomplete="on" autocorrect="off" autocapitalize="off" spellcheck="false">
+        </label>
+        <input type=submit value="Upload">
+    </form>
+</body>
+
+</html>
